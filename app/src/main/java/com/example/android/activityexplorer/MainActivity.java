@@ -17,6 +17,7 @@ import android.Manifest;
 
 import androidx.activity.EdgeToEdge;
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -25,11 +26,13 @@ import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Scanner;
 
 public class MainActivity extends AppCompatActivity implements
         AdapterView.OnItemClickListener, AdapterView.OnItemLongClickListener {
@@ -41,7 +44,7 @@ public class MainActivity extends AppCompatActivity implements
     private final File useful_file = new File(Environment.getExternalStoragePublicDirectory
             (Environment.DIRECTORY_DOWNLOADS), "useful_activities.txt");
     private final File tried_file = new File(Environment.getExternalStoragePublicDirectory
-            (Environment.DIRECTORY_DOWNLOADS), "used_activities.txt");
+            (Environment.DIRECTORY_DOWNLOADS), "opened_activities.txt");
 
     private List<ActivityInfo> getAllActivities(Context context) {
         List<ActivityInfo> result = new ArrayList<>();
@@ -50,13 +53,16 @@ public class MainActivity extends AppCompatActivity implements
                 .getInstalledApplications(PackageManager.GET_META_DATA);
 
         for (ApplicationInfo applicationInfo : packages) {
-            Log.d("APPINFO", "getAllRunningActivities: " + applicationInfo.packageName);
             try {
                 PackageInfo pi = context.getPackageManager().getPackageInfo(
                         applicationInfo.packageName, PackageManager.GET_ACTIVITIES);
-                Collections.addAll(result, pi.activities);
+                if (pi.activities != null) {
+                    if (pi.activities.length > 0) {
+                        Collections.addAll(result, pi.activities);
+                    }
+                }
             } catch (PackageManager.NameNotFoundException | NullPointerException e) {
-                Log.d("APPINFO", e.toString());
+                e.printStackTrace();
             }
         }
         return result;
@@ -105,25 +111,48 @@ public class MainActivity extends AppCompatActivity implements
             startActivity(intent);
         } catch (Exception e) {
             Toast.makeText(this, e.getLocalizedMessage(), Toast.LENGTH_LONG).show();
-            Log.d("APPINFO", e.toString());
+            Log.e("APPINFO", e.toString());
         }
     }
 
+    private boolean search(File file, String searchStr) throws FileNotFoundException {
+        Scanner scan = new Scanner(file);
+        while(scan.hasNext()) {
+            String line = scan.nextLine().toLowerCase();
+            if (line.contains(searchStr)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void populate() {
-        // todo load from file if exists.
         List<ActivityInfo> result = this.getAllActivities(this);
         ArrayList<Model> models = new ArrayList<>();
         long id = 0;
 
         for (ActivityInfo a : result) {
-            models.add(new Model(++id, a.name, a.packageName));
-            String record = a.packageName + ":" + a.name + "\n";
-            try (FileOutputStream stream = new FileOutputStream(this.report_file)) {
-                stream.write(record.getBytes());
-            } catch (IOException e) {
-                throw new RuntimeException(e);
+            // todo mark from files.
+            Model model = new Model(++id, a.name, a.packageName);
+            try {
+                model.setUseful(this.search(this.useful_file, a.name));
+                model.setViewed(this.search(this.tried_file, a.name));
+            } catch (FileNotFoundException e) {
+                Log.d("APPINFO", "First start");
             }
-            Log.d("APPINFO", a.toString());
+            models.add(model);
+        }
+        if (!this.report_file.exists()) {
+            for (ActivityInfo a : result) {
+                Log.d("APPINFO", a.toString());
+                String record = a.packageName + ":" + a.name + "\n";
+                try (FileOutputStream stream = new FileOutputStream(this.report_file,
+                        true)) {
+                    stream.write(record.getBytes());
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
         }
         adapter.update(models);
     }
@@ -144,6 +173,21 @@ public class MainActivity extends AppCompatActivity implements
 
     protected void onStart() {
         super.onStart();
+        if (!this.report_file.exists()) {
+            String message = "Output files saved in Downloads.\n" +
+                    "activity_report.txt - All found potentially runnable activities.\n" +
+                    "useful_activities.txt - Activities marked as useful\n" +
+                    "opened_activities.txt - Activities opened via this app.\n\n" +
+                    "Deleting these files resets the state of this app.\n" +
+                    "activity_report.txt is created only if it does not exists.\n\n" +
+                    "Mark activity as useful with long press.\n" +
+                    "Activities with + have been run before.\n" +
+                    "Activities with U have been marked as useful by the user.";
+            AlertDialog.Builder alBuilder = new AlertDialog.Builder(this);
+            alBuilder.setMessage(message).setPositiveButton("Yes", null);
+            alBuilder.setCancelable(false);
+            alBuilder.show();
+        }
         boolean hasPermission = (ContextCompat.checkSelfPermission(getBaseContext(),
                 Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED);
         if (!hasPermission) {

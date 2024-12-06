@@ -118,8 +118,9 @@ public class MainActivity extends AppCompatActivity implements
     private boolean search(File file, String searchStr) throws FileNotFoundException {
         Scanner scan = new Scanner(file);
         while(scan.hasNext()) {
-            String line = scan.nextLine().toLowerCase();
+            String line = scan.nextLine();
             if (line.contains(searchStr)) {
+                Log.d("APPINFO", "found");
                 return true;
             }
         }

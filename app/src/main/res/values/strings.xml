@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">Activity explorer</string>
+    <string name="howto">Howto</string>
+    <string name="clear_output_files">Clear output files</string>
 </resources>

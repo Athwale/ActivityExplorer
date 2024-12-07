@@ -120,7 +120,6 @@ public class MainActivity extends AppCompatActivity implements
         while(scan.hasNext()) {
             String line = scan.nextLine();
             if (line.contains(searchStr)) {
-                Log.d("APPINFO", "found");
                 return true;
             }
         }
@@ -133,7 +132,6 @@ public class MainActivity extends AppCompatActivity implements
         long id = 0;
 
         for (ActivityInfo a : result) {
-            // todo mark from files.
             Model model = new Model(++id, a.name, a.packageName);
             try {
                 model.setUseful(this.search(this.useful_file, a.name));
